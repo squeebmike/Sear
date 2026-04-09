@@ -1,1 +1,1345 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEAR \u2014 Perfect Steak Every Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Karla:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --char: #0e0c0a;
+    --ash: #1a1714;
+    --smoke: #2a2420;
+    --ember: #c8601a;
+    --flame: #e8821e;
+    --gold: #d4a84b;
+    --cream: #f0e8d8;
+    --bone: #e8dcc8;
+    --muted: #7a6e62;
+    --red-rare: #c0392b;
+    --pink-med: #e07b6a;
+    --rose-mmed: #d4856a;
+    --tan-mwell: #b8864e;
+    --gray-well: #8a7a6a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--char);
+    color: var(--cream);
+    font-family: 'Karla', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* Header */
+  header {
+    padding: 2rem 2.5rem 1rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(200,96,26,0.2);
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5rem;
+    letter-spacing: 0.1em;
+    color: var(--ember);
+    line-height: 1;
+  }
+
+  .tagline {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Main layout */
+  .app-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* Step system */
+  .step {
+    display: none;
+    animation: fadeUp 0.4s ease forwards;
+  }
+  .step.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Section labels */
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-bottom: 0.75rem;
+  }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: 0.05em;
+    color: var(--cream);
+    line-height: 1;
+    margin-bottom: 1.75rem;
+  }
+
+  /* Card grid selectors */
+  .card-grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .card-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+  @media (max-width: 600px) {
+    .card-grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+    .card-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .card-option {
+    background: var(--ash);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+  }
+
+  .card-option:hover {
+    border-color: rgba(200,96,26,0.4);
+    background: var(--smoke);
+  }
+
+  .card-option.selected {
+    background: rgba(200,96,26,0.15);
+    border-color: var(--ember);
+  }
+
+  .card-option .icon {
+    font-size: 1.75rem;
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  .card-option .name {
+    font-family: 'Karla', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--cream);
+    display: block;
+  }
+
+  .card-option .sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+    display: block;
+  }
+
+  /* Doneness selector with color */
+  .doneness-option {
+    background: var(--ash);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 1rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .doneness-option::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--dot-color);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .doneness-option:hover::before,
+  .doneness-option.selected::before { opacity: 1; }
+
+  .doneness-option.selected {
+    border-color: var(--dot-color);
+    background: rgba(255,255,255,0.04);
+  }
+
+  .doneness-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--dot-color);
+    margin: 0 auto 0.5rem;
+    display: block;
+  }
+
+  .doneness-option .name {
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--cream);
+    display: block;
+  }
+
+  .doneness-option .temp {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+    display: block;
+  }
+
+  /* Thickness slider */
+  .thickness-display {
+    text-align: center;
+    margin: 1.5rem 0;
+  }
+
+  .thickness-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5rem;
+    color: var(--ember);
+    line-height: 1;
+  }
+
+  .thickness-unit {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--smoke);
+    border-radius: 2px;
+    outline: none;
+    margin: 1rem 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--ember);
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(200,96,26,0.5);
+  }
+
+  .thickness-marks {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  /* Toggle unit */
+  .unit-toggle {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .unit-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 0.3rem 1rem;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .unit-btn.active {
+    background: var(--ember);
+    border-color: var(--ember);
+    color: white;
+  }
+
+  /* Additional details */
+  .detail-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .detail-card {
+    background: var(--ash);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .detail-card:hover { border-color: rgba(200,96,26,0.3); }
+  .detail-card.selected {
+    border-color: var(--ember);
+    background: rgba(200,96,26,0.1);
+  }
+
+  .detail-card .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .detail-card .value {
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+
+  /* Nav buttons */
+  .nav-row {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .btn-primary {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    padding: 0.9rem 2.5rem;
+    background: var(--ember);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+  }
+
+  .btn-primary:hover {
+    background: var(--flame);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(200,96,26,0.4);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .btn-secondary {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    padding: 0.9rem 1.5rem;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover { color: var(--cream); border-color: rgba(255,255,255,0.2); }
+
+  /* Progress bar */
+  .step-progress {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .progress-dot {
+    height: 3px;
+    border-radius: 2px;
+    flex: 1;
+    background: var(--smoke);
+    transition: background 0.3s;
+  }
+
+  .progress-dot.done { background: var(--ember); }
+  .progress-dot.active { background: var(--flame); }
+
+  /* ============================================
+     TIMER SCREEN
+  ============================================ */
+  #step-timer {
+    text-align: center;
+  }
+
+  .timer-header {
+    margin-bottom: 2rem;
+  }
+
+  .cook-summary {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .summary-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid rgba(200,96,26,0.3);
+    border-radius: 20px;
+    color: var(--gold);
+  }
+
+  /* Big timer ring */
+  .timer-ring-container {
+    position: relative;
+    width: 240px;
+    height: 240px;
+    margin: 0 auto 2rem;
+  }
+
+  .timer-svg {
+    transform: rotate(-90deg);
+    width: 100%; height: 100%;
+  }
+
+  .timer-track {
+    fill: none;
+    stroke: var(--smoke);
+    stroke-width: 8;
+  }
+
+  .timer-progress {
+    fill: none;
+    stroke: var(--ember);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+    filter: drop-shadow(0 0 6px rgba(200,96,26,0.6));
+  }
+
+  .timer-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .timer-phase {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-bottom: 0.3rem;
+  }
+
+  .timer-digits {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5rem;
+    color: var(--cream);
+    line-height: 1;
+  }
+
+  .timer-side-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  /* Phase indicators */
+  .phase-track {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .phase-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.72rem;
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .phase-item.active {
+    border-color: var(--ember);
+    color: var(--cream);
+    background: rgba(200,96,26,0.1);
+  }
+
+  .phase-item.done {
+    border-color: rgba(212,168,75,0.4);
+    color: var(--gold);
+  }
+
+  .phase-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Flip alert */
+  .flip-alert {
+    background: rgba(200,96,26,0.15);
+    border: 1px solid var(--ember);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    animation: pulse-glow 1.5s ease-in-out infinite;
+    display: none;
+  }
+
+  .flip-alert.show { display: block; }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 rgba(200,96,26,0); }
+    50% { box-shadow: 0 0 20px rgba(200,96,26,0.3); }
+  }
+
+  .flip-alert-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    color: var(--ember);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.25rem;
+  }
+
+  .flip-alert-sub {
+    font-size: 0.82rem;
+    color: var(--bone);
+  }
+
+  /* Done screen */
+  .done-card {
+    background: linear-gradient(135deg, rgba(200,96,26,0.15), rgba(212,168,75,0.08));
+    border: 1px solid rgba(200,96,26,0.4);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+
+  .done-card.show { display: block; }
+
+  .done-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+
+  .done-temp {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--bone);
+    margin-bottom: 0.75rem;
+  }
+
+  .rest-bar-wrap {
+    background: var(--smoke);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-top: 0.75rem;
+  }
+
+  .rest-bar {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 4px;
+    transition: width 1s linear;
+  }
+
+  .rest-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.4rem;
+    text-align: left;
+  }
+
+  /* Timer controls */
+  .timer-controls {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .btn-timer {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.12em;
+    padding: 0.75rem 2rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-start {
+    background: var(--ember);
+    color: white;
+    min-width: 140px;
+  }
+
+  .btn-start:hover { background: var(--flame); }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+  }
+
+  .btn-reset:hover { color: var(--cream); border-color: rgba(255,255,255,0.2); }
+
+  /* AI section */
+  .ai-section {
+    background: var(--ash);
+    border: 1px solid rgba(212,168,75,0.2);
+    border-radius: 10px;
+    margin-top: 1.5rem;
+    overflow: hidden;
+  }
+
+  .ai-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .ai-header:hover { background: rgba(255,255,255,0.03); }
+
+  .ai-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--ember), var(--gold));
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .ai-header-text {
+    flex: 1;
+  }
+
+  .ai-header-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--cream);
+  }
+
+  .ai-header-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .ai-chevron {
+    color: var(--muted);
+    font-size: 0.75rem;
+    transition: transform 0.3s;
+  }
+
+  .ai-chevron.open { transform: rotate(180deg); }
+
+  .ai-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .ai-body.open { display: block; }
+
+  .ai-question {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 1rem 0 0.4rem;
+  }
+
+  .ai-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .ai-chip {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--bone);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .ai-chip:hover { border-color: rgba(212,168,75,0.4); color: var(--gold); }
+  .ai-chip.selected { background: rgba(212,168,75,0.15); border-color: var(--gold); color: var(--gold); }
+
+  .ai-ask-btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
+    width: 100%;
+    padding: 0.7rem;
+    margin-top: 1rem;
+    background: linear-gradient(135deg, rgba(200,96,26,0.3), rgba(212,168,75,0.2));
+    border: 1px solid rgba(212,168,75,0.3);
+    border-radius: 6px;
+    color: var(--gold);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .ai-ask-btn:hover { background: linear-gradient(135deg, rgba(200,96,26,0.5), rgba(212,168,75,0.3)); }
+  .ai-ask-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .ai-response {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    border-left: 2px solid var(--gold);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--bone);
+    display: none;
+  }
+
+  .ai-response.show { display: block; }
+
+  .ai-loading {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .ai-loading.show { display: flex; }
+
+  .ai-dots span {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--ember);
+    animation: dotBounce 1.2s ease-in-out infinite;
+  }
+
+  .ai-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .ai-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.05);
+    margin: 1.5rem 0;
+  }
+
+  /* Temp guide */
+  .temp-guide {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.4rem;
+    margin-top: 1rem;
+  }
+
+  .temp-item {
+    text-align: center;
+    padding: 0.5rem 0.25rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .temp-item .t-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    margin: 0 auto 0.3rem;
+  }
+
+  .temp-item .t-name {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--cream);
+  }
+
+  .temp-item .t-temp {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--muted);
+    margin-top: 0.15rem;
+  }
+
+  /* notification banner */
+  .notif-banner {
+    background: rgba(212,168,75,0.1);
+    border: 1px solid rgba(212,168,75,0.3);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    color: var(--bone);
+    cursor: pointer;
+  }
+
+  .notif-banner .nb-icon { font-size: 1rem; flex-shrink: 0; }
+  .notif-banner .nb-link {
+    font-weight: 600;
+    color: var(--gold);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .logo { font-size: 2.5rem; }
+    header { padding: 1.25rem 1rem 0.75rem; }
+    .app-container { padding: 1.25rem 1rem 3rem; }
+    .timer-ring-container { width: 200px; height: 200px; }
+    .timer-digits { font-size: 3rem; }
+    .temp-guide { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SEAR</div>
+  <div class="tagline">Perfect steak. Every time.</div>
+</header>
+
+<div class="app-container">
+
+  <!-- STEP 1: CUT -->
+  <div class="step active" id="step-cut">
+    <div class="step-progress">
+      <div class="progress-dot active" id="p1"></div>
+      <div class="progress-dot" id="p2"></div>
+      <div class="progress-dot" id="p3"></div>
+      <div class="progress-dot" id="p4"></div>
+    </div>
+    <div class="section-label">Step 1 of 4</div>
+    <div class="section-title">Select Your Cut</div>
+    <div class="card-grid cols-3" id="cut-grid">
+      <div class="card-option" data-cut="ribeye" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Ribeye</span>
+        <span class="sub">Rich & marbled</span>
+      </div>
+      <div class="card-option" data-cut="ny-strip" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">NY Strip</span>
+        <span class="sub">Bold & beefy</span>
+      </div>
+      <div class="card-option" data-cut="tenderloin" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Tenderloin</span>
+        <span class="sub">Lean & tender</span>
+      </div>
+      <div class="card-option" data-cut="tbone" onclick="selectCut(this)">
+        <span class="icon">\ud83c\udf56</span>
+        <span class="name">T-Bone</span>
+        <span class="sub">Two cuts in one</span>
+      </div>
+      <div class="card-option" data-cut="sirloin" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Sirloin</span>
+        <span class="sub">Lean & versatile</span>
+      </div>
+      <div class="card-option" data-cut="flank" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Flank</span>
+        <span class="sub">Thin & flavorful</span>
+      </div>
+      <div class="card-option" data-cut="skirt" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Skirt</span>
+        <span class="sub">Best for fajitas</span>
+      </div>
+      <div class="card-option" data-cut="flat-iron" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Flat Iron</span>
+        <span class="sub">Tender shoulder</span>
+      </div>
+      <div class="card-option" data-cut="hanger" onclick="selectCut(this)">
+        <span class="icon">\ud83e\udd69</span>
+        <span class="name">Hanger</span>
+        <span class="sub">Butcher's secret</span>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary" id="btn-cut-next" disabled onclick="goToStep(2)">Next: Thickness \u2192</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: THICKNESS & METHOD -->
+  <div class="step" id="step-thickness">
+    <div class="step-progress">
+      <div class="progress-dot done"></div>
+      <div class="progress-dot active"></div>
+      <div class="progress-dot"></div>
+      <div class="progress-dot"></div>
+    </div>
+    <div class="section-label">Step 2 of 4</div>
+    <div class="section-title">Thickness & Method</div>
+
+    <div class="unit-toggle">
+      <button class="unit-btn active" onclick="setUnit('in')">Inches</button>
+      <button class="unit-btn" onclick="setUnit('cm')">cm</button>
+    </div>
+
+    <div class="thickness-display">
+      <div class="thickness-value" id="thick-val">1.0</div>
+      <div class="thickness-unit" id="thick-unit-label">inches</div>
+    </div>
+
+    <input type="range" id="thickness-slider" min="1" max="40" value="10"
+      oninput="updateThickness(this.value)">
+
+    <div class="thickness-marks">
+      <span id="mark-min">\u00bd"</span>
+      <span id="mark-mid">1\u00bd"</span>
+      <span id="mark-max">2\u00bd"+</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-label" style="margin-top:1rem">Cooking Method</div>
+    <div class="card-grid cols-3" style="margin-bottom:0">
+      <div class="card-option" data-method="cast-iron" onclick="selectMethod(this)">
+        <span class="icon">\ud83c\udf73</span>
+        <span class="name">Cast Iron</span>
+        <span class="sub">Best crust</span>
+      </div>
+      <div class="card-option" data-method="gas-grill" onclick="selectMethod(this)">
+        <span class="icon">\ud83d\udd25</span>
+        <span class="name">Gas Grill</span>
+        <span class="sub">Classic BBQ</span>
+      </div>
+      <div class="card-option" data-method="charcoal" onclick="selectMethod(this)">
+        <span class="icon">\u26ab</span>
+        <span class="name">Charcoal</span>
+        <span class="sub">Smoke flavor</span>
+      </div>
+      <div class="card-option" data-method="ss-pan" onclick="selectMethod(this)">
+        <span class="icon">\ud83e\udd58</span>
+        <span class="name">SS Pan</span>
+        <span class="sub">Fond-forward</span>
+      </div>
+      <div class="card-option" data-method="reverse-sear" onclick="selectMethod(this)">
+        <span class="icon">\u2668\ufe0f</span>
+        <span class="name">Reverse Sear</span>
+        <span class="sub">Pro technique</span>
+      </div>
+      <div class="card-option" data-method="broil" onclick="selectMethod(this)">
+        <span class="icon">\ud83d\udca1</span>
+        <span class="name">Broil</span>
+        <span class="sub">Oven overhead</span>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn-secondary" onclick="goToStep(1)">\u2190 Back</button>
+      <button class="btn-primary" id="btn-thick-next" disabled onclick="goToStep(3)">Next: Doneness \u2192</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: DONENESS & DETAILS -->
+  <div class="step" id="step-doneness">
+    <div class="step-progress">
+      <div class="progress-dot done"></div>
+      <div class="progress-dot done"></div>
+      <div class="progress-dot active"></div>
+      <div class="progress-dot"></div>
+    </div>
+    <div class="section-label">Step 3 of 4</div>
+    <div class="section-title">Doneness</div>
+
+    <div class="card-grid cols-3" id="doneness-grid" style="margin-bottom:1.5rem">
+      <div class="doneness-option" data-doneness="blue-rare" style="--dot-color:#8b0000" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Blue Rare</span>
+        <span class="temp">115\u2013120\u00b0F</span>
+      </div>
+      <div class="doneness-option" data-doneness="rare" style="--dot-color:#c0392b" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Rare</span>
+        <span class="temp">120\u2013125\u00b0F</span>
+      </div>
+      <div class="doneness-option" data-doneness="medium-rare" style="--dot-color:#e07b6a" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Med-Rare</span>
+        <span class="temp">130\u2013135\u00b0F</span>
+      </div>
+      <div class="doneness-option" data-doneness="medium" style="--dot-color:#d4856a" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Medium</span>
+        <span class="temp">135\u2013145\u00b0F</span>
+      </div>
+      <div class="doneness-option" data-doneness="medium-well" style="--dot-color:#b8864e" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Med-Well</span>
+        <span class="temp">145\u2013155\u00b0F</span>
+      </div>
+      <div class="doneness-option" data-doneness="well" style="--dot-color:#6b5c4e" onclick="selectDoneness(this)">
+        <span class="doneness-dot"></span>
+        <span class="name">Well</span>
+        <span class="temp">155\u00b0F+</span>
+      </div>
+    </div>
+
+    <div class="section-label">A Few More Details</div>
+    <div class="detail-row">
+      <div class="detail-card selected" data-detail="temp" data-val="room" onclick="selectDetail(this)">
+        <div class="label">Steak Temp</div>
+        <div class="value">\ud83c\udf21\ufe0f Room Temp</div>
+      </div>
+      <div class="detail-card" data-detail="temp" data-val="cold" onclick="selectDetail(this)">
+        <div class="label">Steak Temp</div>
+        <div class="value">\u2744\ufe0f Fridge Cold</div>
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-card selected" data-detail="butter" data-val="yes" onclick="selectDetail(this)">
+        <div class="label">Butter Baste?</div>
+        <div class="value">\ud83e\uddc8 Yes please</div>
+      </div>
+      <div class="detail-card" data-detail="butter" data-val="no" onclick="selectDetail(this)">
+        <div class="label">Butter Baste?</div>
+        <div class="value">\ud83d\udeab Skip it</div>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn-secondary" onclick="goToStep(2)">\u2190 Back</button>
+      <button class="btn-primary" id="btn-done-next" disabled onclick="buildTimer()">Calculate Cook \u2192</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: TIMER -->
+  <div class="step" id="step-timer">
+    <div class="step-progress">
+      <div class="progress-dot done"></div>
+      <div class="progress-dot done"></div>
+      <div class="progress-dot done"></div>
+      <div class="progress-dot active"></div>
+    </div>
+
+    <div class="timer-header">
+      <div class="cook-summary" id="cook-summary"></div>
+    </div>
+
+    <div id="notif-banner" class="notif-banner" onclick="requestNotifPermission()" style="display:none">
+      <span class="nb-icon">\ud83d\udd14</span>
+      <span><span class="nb-link">Enable notifications</span> to get flip & rest alerts even when your screen is off</span>
+    </div>
+
+    <!-- Flip alert -->
+    <div class="flip-alert" id="flip-alert">
+      <div class="flip-alert-title">\ud83d\udd04 FLIP YOUR STEAK NOW!</div>
+      <div class="flip-alert-sub" id="flip-alert-sub">Time to flip \u2014 then we're almost there.</div>
+    </div>
+
+    <!-- Done card -->
+    <div class="done-card" id="done-card">
+      <div class="done-title">\ud83c\udf89 STEAK IS DONE!</div>
+      <div class="done-temp" id="done-temp-text">Remove from heat now. Target internal temp reached.</div>
+      <div style="margin-top:0.5rem; font-size:0.82rem; color:var(--bone)">Now resting \u2014 don't cut yet!</div>
+      <div class="rest-bar-wrap">
+        <div class="rest-bar" id="rest-bar" style="width:100%"></div>
+      </div>
+      <div class="rest-label" id="rest-label">Resting: 5:00 remaining</div>
+    </div>
+
+    <!-- Timer Ring -->
+    <div class="timer-ring-container">
+      <svg class="timer-svg" viewBox="0 0 100 100">
+        <circle class="timer-track" cx="50" cy="50" r="42"/>
+        <circle class="timer-progress" id="timer-circle" cx="50" cy="50" r="42"
+          stroke-dasharray="263.9" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-center">
+        <div class="timer-phase" id="timer-phase">READY</div>
+        <div class="timer-digits" id="timer-digits">\u2014:\u2014\u2014</div>
+        <div class="timer-side-label" id="timer-side-label">Press Start</div>
+      </div>
+    </div>
+
+    <!-- Phase track -->
+    <div class="phase-track" id="phase-track"></div>
+
+    <!-- Controls -->
+    <div class="timer-controls">
+      <button class="btn-timer btn-start" id="btn-start-timer" onclick="toggleTimer()">Start Cook</button>
+      <button class="btn-timer btn-reset" onclick="resetTimer()">Reset</button>
+    </div>
+
+    <!-- AI Panel -->
+    <div class="ai-section">
+      <div class="ai-header" onclick="toggleAI()">
+        <div class="ai-icon">\u2726</div>
+        <div class="ai-header-text">
+          <div class="ai-header-title">AI Chef Advice</div>
+          <div class="ai-header-sub">Get pro tips tailored to your exact cook</div>
+        </div>
+        <span class="ai-chevron" id="ai-chevron">\u25bc</span>
+      </div>
+      <div class="ai-body" id="ai-body">
+        <div class="ai-question">How's your pan/grill right now?</div>
+        <div class="ai-options">
+          <button class="ai-chip" onclick="selectChip(this,'heat','ripping')">\ud83d\udd25 Ripping hot</button>
+          <button class="ai-chip" onclick="selectChip(this,'heat','medium-high')">\ud83d\udd06 Medium-high</button>
+          <button class="ai-chip" onclick="selectChip(this,'heat','just-preheated')">\u23f1 Just preheated</button>
+          <button class="ai-chip" onclick="selectChip(this,'heat','not-sure')">\ud83e\udd37 Not sure</button>
+        </div>
+        <div class="ai-question">Fat cap / marbling?</div>
+        <div class="ai-options">
+          <button class="ai-chip" onclick="selectChip(this,'marbling','heavy')">\ud83e\udd69 Heavy marbling</button>
+          <button class="ai-chip" onclick="selectChip(this,'marbling','moderate')">\u2696\ufe0f Moderate</button>
+          <button class="ai-chip" onclick="selectChip(this,'marbling','lean')">\ud83c\udf3f Lean</button>
+        </div>
+        <div class="ai-question">Anything else?</div>
+        <div class="ai-options">
+          <button class="ai-chip" onclick="selectChip(this,'extra','dry-brined')">\ud83e\uddc2 Dry brined</button>
+          <button class="ai-chip" onclick="selectChip(this,'extra','marinated')">\ud83e\uded9 Marinated</button>
+          <button class="ai-chip" onclick="selectChip(this,'extra','just-seasoned')">\u26a1 Just seasoned</button>
+          <button class="ai-chip" onclick="selectChip(this,'extra','high-altitude')">\ud83c\udfd4 High altitude</button>
+        </div>
+        <button class="ai-ask-btn" id="ai-ask-btn" onclick="askAI()">\u2726 Get AI Chef Tips</button>
+        <div class="ai-loading" id="ai-loading">
+          <span>Thinking</span>
+          <div class="ai-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <div class="ai-response" id="ai-response"></div>
+      </div>
+    </div>
+
+    <div class="nav-row" style="margin-top:1.5rem">
+      <button class="btn-secondary" onclick="goToStep(3)">\u2190 Change Settings</button>
+      <button class="btn-primary" onclick="goToStep(1)">Cook Another</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =============================================
+// STATE
+// =============================================
+const state = {
+  cut: null,
+  method: null,
+  doneness: null,
+  thicknessIn: 1.0,
+  unit: 'in',
+  temp: 'room',
+  butter: 'yes',
+  aiChips: {}
+};
+
+// Cook phases storage
+let phases = [];
+let currentPhaseIdx = 0;
+let timerInterval = null;
+let timerRunning = false;
+let timerSecondsLeft = 0;
+let totalPhaseSeconds = 0;
+let notifGranted = false;
+
+// =============================================
+// STEP NAVIGATION
+// =============================================
+function goToStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + ['cut','thickness','doneness','timer'][n-1]).classList.add('active');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+// =============================================
+// CUT SELECTION
+// =============================================
+function selectCut(el) {
+  document.querySelectorAll('#cut-grid .card-option').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.cut = el.dataset.cut;
+  document.getElementById('btn-cut-next').disabled = false;
+}
+
+// =============================================
+// THICKNESS
+// =============================================
+function updateThickness(val) {
+  const raw = val / 10;
+  if (state.unit === 'in') {
+    state.thicknessIn = raw;
+    document.getElementById('thick-val').textContent = raw.toFixed(1);
+  } else {
+    const cm = raw * 2.54;
+    state.thicknessIn = raw;
+    document.getElementById('thick-val').textContent = cm.toFixed(1);
+  }
+  checkThicknessNext();
+}
+
+function setUnit(u) {
+  state.unit = u;
+  document.querySelectorAll('.unit-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const raw = state.thicknessIn;
+  if (u === 'cm') {
+    document.getElementById('thick-val').textContent = (raw * 2.54).toFixed(1);
+    document.getElementById('thick-unit-label').textContent = 'centimeters';
+    document.getElementById('mark-min').textContent = '1.3cm';
+    document.getElementById('mark-mid').textContent = '4cm';
+    document.getElementById('mark-max').textContent = '6.4cm+';
+  } else {
+    document.getElementById('thick-val').textContent = raw.toFixed(1);
+    document.getElementById('thick-unit-label').textContent = 'inches';
+    document.getElementById('mark-min').textContent = '\u00bd"';
+    document.getElementById('mark-mid').textContent = '1\u00bd"';
+    document.getElementById('mark-max').textContent = '2\u00bd"+';
+  }
+}
+
+function selectMethod(el) {
+  document.querySelectorAll('[data-method]').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.method = el.dataset.method;
+  checkThicknessNext();
+}
+
+function checkThicknessNext() {
+  document.getElementById('btn-thick-next').disabled = !(state.method);
+}
+
+// =============================================
+// DONENESS
+// =============================================
+function selectDoneness(el) {
+  document.querySelectorAll('[data-doneness]').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.doneness = el.dataset.doneness;
+  document.getElementById('btn-done-next').disabled = false;
+}
+
+// =============================================
+// DETAILS
+// =============================================
+function selectDetail(el) {
+  const det = el.dataset.detail;
+  document.querySelectorAll(`[data-detail="${det}"]`).forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state[det] = el.dataset.val;
+}
+
+// =============================================
+// COOK TIME CALCULATION
+// =============================================
+const COOK_TIMES = {
+  // [base sear side1, base sear side2] in seconds per inch of thickness
+  // Format: { perInch: [s1,s2], base: [b1,b2], restMin }
+  'cast-iron':    { perInch: [60, 50], base: [60, 55], restMin: 5 },
+  'ss-pan':       { perInch: [65, 55], base: [65, 60], restMin: 5 },
+  'gas-grill':    { perInch: [55, 50], base: [65, 60], restMin: 5 },
+  'charcoal':     { perInch: [50, 45], base: [70, 65], restMin: 6 },
+  'broil':        { perInch: [70, 65], base: [75, 70], restMin: 4 },
+  'reverse-sear': { perInch: [0, 0],   base: [0, 0],   restMin: 3 },
+};
+
+const DONENESS_MULT = {
+  'blue-rare':   0.55,
+  'rare':        0.65,
+  'medium-rare': 0.80,
+  'medium':      1.00,
+  'medium-well': 1.20,
+  'well':        1.45,
+};
+
+const DONENESS_TEMPS = {
+  'blue-rare':   '115\u2013120\u00b0F (46\u201349\u00b0C)',
+  'rare':        '120\u2013125\u00b0F (49\u201352\u00b0C)',
+  'medium-rare': '130\u2013135\u00b0F (54\u201357\u00b0C)',
+  'medium':      '135\u2013145\u00b0F (57\u201363\u00b0C)',
+  'medium-well': '145\u2013155\u00b0F (63\u201368\u00b0C)',
+  'well':        '155\u00b0F+ (68\u00b0C+)',
+};
+
+function calcCookTime() {
+  const t = state.thicknessIn;
+  const m = COOK_TIMES[state.method];
+  const mult = DONENESS_MULT[state.doneness];
+  const coldAdj = state.temp === 'cold' ? 1.18 : 1.0;
+
+  if (state.method === 'reverse-sear') {
+    // Oven phase + sear phase
+    const ovenMins = Math.round((t * 25 + 15) * mult * coldAdj);
+    const sear1 = Math.round(60 * mult);
+    const sear2 = Math.round(50 * mult);
+    return [
+      { label: 'Oven (225\u00b0F)', seconds: ovenMins *
