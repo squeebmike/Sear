@@ -149,19 +149,40 @@ def build_hand_arm_mask(landmarks_list, h, w,
             thickness = max(12, arm_thickness // 7)
             cv2.line(mask, tuple(pts[0]), tuple(m_end), 255, thickness)
 
-    # 4. Sleeve: dark pixels that touch the arm region.
-    #    Use a generous expand kernel and a higher darkness threshold (< 110)
-    #    so that dark clothing/sleeves connected to the arm area get captured.
+    # 4. Sleeve: dark pixels restricted to the arm ray zone only.
+    #    We search for dark clothing pixels ONLY within a wide band along the
+    #    arm direction — this prevents dark ink lines on the paper from being
+    #    picked up as sleeve pixels.
     if enable_sleeve and mask.max() > 0 and frame_bgr is not None:
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         dark = (gray < 110).astype(np.uint8) * 255
-        expand_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (101, 101))
-        sleeve_zone = cv2.dilate(mask, expand_k)
-        sleeve_pixels = cv2.bitwise_and(dark, sleeve_zone)
-        # Grow the sleeve pixels to fill gaps in the fabric texture
-        fill_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
-        sleeve_filled = cv2.dilate(sleeve_pixels, fill_k)
-        mask = cv2.bitwise_or(mask, sleeve_filled)
+
+        # Build an arm-only search zone: just the arm ray, 2× thickness
+        arm_zone = np.zeros((h, w), dtype=np.uint8)
+        for lm_list in landmarks_list:
+            lm_pts = np.array(
+                [[int(lm.x * w), int(lm.y * h)] for lm in lm_list],
+                dtype=np.int32,
+            )
+            lm_wrist  = lm_pts[0].astype(np.float64)
+            lm_center = lm_pts.mean(axis=0).astype(np.float64)
+            lm_v = lm_wrist - lm_center
+            lm_n = np.linalg.norm(lm_v)
+            if lm_n > 1e-3:
+                lm_v /= lm_n
+            lm_end = np.clip(
+                (lm_wrist + lm_v * arm_length).astype(np.int32),
+                [0, 0], [w - 1, h - 1],
+            )
+            cv2.line(arm_zone, tuple(lm_pts[0]), tuple(lm_end),
+                     255, arm_thickness * 2)
+
+        # Dark pixels that fall inside the arm zone = sleeve
+        sleeve_px = cv2.bitwise_and(dark, arm_zone)
+        # Small closing to fill gaps in fabric texture
+        close_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+        sleeve_px = cv2.morphologyEx(sleeve_px, cv2.MORPH_CLOSE, close_k)
+        mask = cv2.bitwise_or(mask, sleeve_px)
 
     # Final dilation to cover edges / finger gaps
     if dilate_px > 0:
