@@ -9,26 +9,47 @@ Usage:
 
 import argparse
 import csv
+import os
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 import cv2
-import mediapipe as mp
 import numpy as np
+import mediapipe as mp
+from mediapipe.tasks import python as mp_tasks
+from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe import Image, ImageFormat
+
+MODEL_FILENAME = "hand_landmarker.task"
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/"
+    "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+)
+
+
+def ensure_model():
+    model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), MODEL_FILENAME)
+    if not os.path.exists(model_path):
+        print(f"  Downloading hand detection model (~6 MB) ...")
+        urllib.request.urlretrieve(MODEL_URL, model_path)
+        print("  Model downloaded.\n")
+    return model_path
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Remove frames containing hands from a drawing video."
     )
-    parser.add_argument("input", help="Path to the input MP4 video")
+    parser.add_argument("input", help="Path to the input video")
     parser.add_argument("output", help="Path for the cleaned output MP4")
     parser.add_argument(
         "--buffer",
         type=int,
         default=5,
-        help="Number of extra frames to remove before and after each hand frame (default: 5)",
+        help="Extra frames to remove before and after each hand frame (default: 5)",
     )
     parser.add_argument(
         "--confidence",
@@ -36,21 +57,25 @@ def parse_args():
         default=0.5,
         help="Minimum hand detection confidence 0.0-1.0 (default: 0.5)",
     )
+    parser.add_argument(
+        "--csv",
+        default=None,
+        help="Optional custom path for the CSV report",
+    )
     return parser.parse_args()
 
 
 def build_removal_set(hand_frames: set, total: int, buffer: int) -> set:
-    """Expand hand frame indices by ±buffer frames."""
     removal = set()
     for f in hand_frames:
-        start = max(0, f - buffer)
-        end = min(total - 1, f + buffer)
-        for i in range(start, end + 1):
+        for i in range(max(0, f - buffer), min(total - 1, f + buffer) + 1):
             removal.add(i)
     return removal
 
 
-def process_video(input_path: str, output_path: str, buffer: int, confidence: float):
+def process_video(input_path: str, output_path: str, buffer: int, confidence: float, csv_path_override):
+    model_path = ensure_model()
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         print(f"ERROR: Cannot open video file: {input_path}")
@@ -66,62 +91,58 @@ def process_video(input_path: str, output_path: str, buffer: int, confidence: fl
     print(f"  FPS    : {fps:.2f}")
     print(f"  Size   : {width}x{height}")
     print(f"  Frames : {total_frames}")
-    print(f"  Buffer : ±{buffer} frames")
-    print(f"  Confidence threshold: {confidence}\n")
+    print(f"  Buffer : +/-{buffer} frames")
+    print(f"  Confidence: {confidence}\n")
 
-    # --- Pass 1: detect hand frames ---
-    mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(
-        static_image_mode=False,
-        max_num_hands=2,
-        min_detection_confidence=confidence,
+    options = HandLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=model_path),
+        num_hands=2,
+        min_hand_detection_confidence=confidence,
+        min_hand_presence_confidence=confidence,
         min_tracking_confidence=confidence,
     )
 
-    frame_records = []   # list of dicts for CSV
+    frame_records = []
     hand_frame_indices = set()
 
     print("Pass 1/2 — Scanning for hands...")
     start_time = time.time()
 
-    idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    with HandLandmarker.create_from_options(options) as detector:
+        idx = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = hands.process(rgb)
-        has_hand = result.multi_hand_landmarks is not None
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = Image(image_format=ImageFormat.SRGB, data=rgb)
+            result = detector.detect(mp_image)
+            has_hand = len(result.hand_landmarks) > 0
 
-        timestamp = idx / fps if fps > 0 else 0.0
-        frame_records.append(
-            {
+            timestamp = idx / fps if fps > 0 else 0.0
+            frame_records.append({
                 "frame_number": idx,
                 "timestamp_seconds": round(timestamp, 4),
                 "hand_detected": has_hand,
-                "removed_by_buffer": False,  # filled in later
-                "kept": None,               # filled in later
-            }
-        )
+                "removed_by_buffer": False,
+                "kept": None,
+            })
 
-        if has_hand:
-            hand_frame_indices.add(idx)
+            if has_hand:
+                hand_frame_indices.add(idx)
 
-        idx += 1
-        if idx % 100 == 0:
-            elapsed = time.time() - start_time
-            pct = idx / total_frames * 100 if total_frames else 0
-            print(f"  Scanned {idx}/{total_frames} frames ({pct:.1f}%) — {elapsed:.1f}s elapsed")
+            idx += 1
+            if idx % 100 == 0:
+                elapsed = time.time() - start_time
+                pct = idx / total_frames * 100 if total_frames else 0
+                print(f"  Scanned {idx}/{total_frames} frames ({pct:.1f}%) — {elapsed:.1f}s")
 
     cap.release()
-    hands.close()
 
-    # --- Compute removal set with buffer ---
     removal_set = build_removal_set(hand_frame_indices, total_frames, buffer)
-    buffer_only = removal_set - hand_frame_indices  # frames removed solely by buffer
+    buffer_only = removal_set - hand_frame_indices
 
-    # Fill CSV fields
     for rec in frame_records:
         f = rec["frame_number"]
         rec["removed_by_buffer"] = f in buffer_only
@@ -152,25 +173,17 @@ def process_video(input_path: str, output_path: str, buffer: int, confidence: fl
     out.release()
 
     # --- CSV report ---
-    csv_path = Path(output_path).with_suffix(".csv")
+    csv_path = Path(csv_path_override) if csv_path_override else Path(output_path).with_suffix(".csv")
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "frame_number",
-                "timestamp_seconds",
-                "hand_detected",
-                "removed_by_buffer",
-                "kept",
-            ],
-        )
+        writer = csv.DictWriter(f, fieldnames=[
+            "frame_number", "timestamp_seconds", "hand_detected",
+            "removed_by_buffer", "kept",
+        ])
         writer.writeheader()
         writer.writerows(frame_records)
 
-    # --- Summary ---
     hand_removed = len(hand_frame_indices)
     buffer_removed = len(buffer_only)
-    total_removed = len(removal_set)
     pct_kept = kept_count / total_frames * 100 if total_frames else 0
     orig_duration = total_frames / fps if fps > 0 else 0
     final_duration = kept_count / fps if fps > 0 else 0
@@ -192,7 +205,7 @@ def process_video(input_path: str, output_path: str, buffer: int, confidence: fl
 
 def main():
     args = parse_args()
-    process_video(args.input, args.output, args.buffer, args.confidence)
+    process_video(args.input, args.output, args.buffer, args.confidence, args.csv)
 
 
 if __name__ == "__main__":
