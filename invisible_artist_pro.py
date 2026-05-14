@@ -77,6 +77,8 @@ def parse_args():
                    help="Arm ray width in pixels (default: 190)")
     p.add_argument("--feather",            type=int,   default=15,
                    help="Mask edge feather in pixels (default: 15)")
+    p.add_argument("--mask-memory",        type=int,   default=5,
+                   help="Frames to keep mask active after hand disappears — prevents flicker (default: 5)")
 
     # Optional mask extensions
     p.add_argument("--enable-sleeve-mask", action="store_true",
@@ -147,14 +149,19 @@ def build_hand_arm_mask(landmarks_list, h, w,
             thickness = max(12, arm_thickness // 7)
             cv2.line(mask, tuple(pts[0]), tuple(m_end), 255, thickness)
 
-    # 4. Sleeve: dark pixels (value < 80) that touch the arm region
+    # 4. Sleeve: dark pixels that touch the arm region.
+    #    Use a generous expand kernel and a higher darkness threshold (< 110)
+    #    so that dark clothing/sleeves connected to the arm area get captured.
     if enable_sleeve and mask.max() > 0 and frame_bgr is not None:
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        dark = (gray < 80).astype(np.uint8) * 255
-        expand_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (41, 41))
+        dark = (gray < 110).astype(np.uint8) * 255
+        expand_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (101, 101))
         sleeve_zone = cv2.dilate(mask, expand_k)
-        sleeve_add  = cv2.bitwise_and(dark, sleeve_zone)
-        mask = cv2.bitwise_or(mask, sleeve_add)
+        sleeve_pixels = cv2.bitwise_and(dark, sleeve_zone)
+        # Grow the sleeve pixels to fill gaps in the fabric texture
+        fill_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
+        sleeve_filled = cv2.dilate(sleeve_pixels, fill_k)
+        mask = cv2.bitwise_or(mask, sleeve_filled)
 
     # Final dilation to cover edges / finger gaps
     if dilate_px > 0:
@@ -176,6 +183,25 @@ def feather(mask, px):
 def blend(frame, canvas, alpha):
     a = alpha[:, :, np.newaxis]
     return (frame.astype(np.float32) * (1.0 - a) + canvas * a).astype(np.uint8)
+
+
+def apply_mask_memory(current_mask, persistence, memory_frames):
+    """
+    Sticky mask: once a pixel is masked, keep it masked for `memory_frames`
+    additional frames after the detector stops seeing a hand there.
+    This eliminates flicker when the hand is stationary or detection drops briefly.
+
+    Updates `persistence` in-place and returns the combined mask.
+    """
+    # Where hand is currently detected: reset counter to full memory
+    persistence[current_mask > 0] = memory_frames
+    # Where hand is gone: count down
+    off = (current_mask == 0)
+    persistence[off] = np.maximum(0, persistence[off] - 1)
+    # Combined: current mask OR still within memory window
+    combined = np.where((current_mask > 0) | (persistence > 0),
+                        np.uint8(255), np.uint8(0))
+    return combined
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -226,6 +252,7 @@ def build_final_canvas(video_path, detector, bg, total, args):
     """
     canvas       = bg.copy()            # float32 clean plate
     stable_count = np.zeros(bg.shape[:2], dtype=np.uint16)
+    persistence  = np.zeros(bg.shape[:2], dtype=np.uint8)   # mask memory
 
     cap = cv2.VideoCapture(video_path)
     t0  = time.time()
@@ -240,7 +267,7 @@ def build_final_canvas(video_path, detector, bg, total, args):
         result = detector.detect(Image(image_format=ImageFormat.SRGB, data=rgb))
 
         if result.hand_landmarks:
-            mask = build_hand_arm_mask(
+            raw_mask = build_hand_arm_mask(
                 result.hand_landmarks,
                 frame.shape[0], frame.shape[1],
                 args.mask_dilate, args.arm_length, args.arm_thickness,
@@ -248,7 +275,10 @@ def build_final_canvas(video_path, detector, bg, total, args):
                 args.enable_sleeve_mask, args.enable_marker_mask,
             )
         else:
-            mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+            raw_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+
+        # Apply sticky mask memory — prevents flicker on canvas stability
+        mask = apply_mask_memory(raw_mask, persistence, args.mask_memory)
 
         frame_f  = frame.astype(np.float32)
         clean_px = (mask == 0)
@@ -296,6 +326,7 @@ def render(video_path, final_canvas, bg, detector, total, fps, width, height, ar
 
     cap          = cv2.VideoCapture(video_path)
     high_cov     = 0
+    persistence  = np.zeros((height, width), dtype=np.uint8)  # mask memory
     t0           = time.time()
     print("  Pass 2 — rendering...")
 
@@ -308,14 +339,17 @@ def render(video_path, final_canvas, bg, detector, total, fps, width, height, ar
         result = detector.detect(Image(image_format=ImageFormat.SRGB, data=rgb))
 
         if result.hand_landmarks:
-            mask = build_hand_arm_mask(
+            raw_mask = build_hand_arm_mask(
                 result.hand_landmarks, height, width,
                 args.mask_dilate, args.arm_length, args.arm_thickness,
                 frame if args.enable_sleeve_mask else None,
                 args.enable_sleeve_mask, args.enable_marker_mask,
             )
         else:
-            mask = np.zeros((height, width), dtype=np.uint8)
+            raw_mask = np.zeros((height, width), dtype=np.uint8)
+
+        # Sticky mask: prevents flicker when hand is still or detection wavers
+        mask = apply_mask_memory(raw_mask, persistence, args.mask_memory)
 
         cov = mask.mean() / 255.0
         if cov > 0.6:
@@ -333,7 +367,7 @@ def render(video_path, final_canvas, bg, detector, total, fps, width, height, ar
         if args.debug:
             if dbg_mask:
                 vis = frame.copy()
-                vis[mask > 0] = [0, 0, 200]
+                vis[mask > 0] = [0, 0, 200]   # show the full sticky mask
                 dbg_mask.write(vis)
             if dbg_canvas:
                 dbg_canvas.write(final_canvas.astype(np.uint8))
@@ -387,7 +421,7 @@ def main():
     print(f"  Input         : {args.input}")
     print(f"  Output        : {args.output}")
     print(f"  Resolution    : {width}x{height}  FPS: {fps:.2f}  Frames: {total}")
-    print(f"  Dilate/Feather: {args.mask_dilate}px / {args.feather}px")
+    print(f"  Dilate/Feather: {args.mask_dilate}px / {args.feather}px  Memory: {args.mask_memory} frames")
     print(f"  Arm           : {args.arm_length}px long  {args.arm_thickness}px wide")
     print(f"  Stable frames : {args.stable_frames}  Art threshold: {args.art_threshold}")
     print(f"  Sleeve mask   : {args.enable_sleeve_mask}")
