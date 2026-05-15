@@ -77,8 +77,8 @@ def parse_args():
                    help="Arm ray width in pixels (default: 190)")
     p.add_argument("--feather",            type=int,   default=15,
                    help="Mask edge feather in pixels (default: 15)")
-    p.add_argument("--mask-memory",        type=int,   default=5,
-                   help="Frames to keep mask active after hand disappears — prevents flicker (default: 5)")
+    p.add_argument("--mask-memory",        type=int,   default=3,
+                   help="Frames to keep mask active after hand disappears — prevents flicker (default: 3)")
 
     # Optional mask extensions
     p.add_argument("--enable-sleeve-mask", action="store_true",
@@ -87,8 +87,8 @@ def parse_args():
                    help="Mask marker/pen body near index finger")
 
     # Canvas / artwork
-    p.add_argument("--stable-frames",      type=int,   default=2,
-                   help="Clean frames required before committing new artwork (default: 2)")
+    p.add_argument("--stable-frames",      type=int,   default=1,
+                   help="Clean frames required before committing new artwork (default: 1)")
     p.add_argument("--art-threshold",      type=int,   default=18,
                    help="Min pixel change to count as new artwork (default: 18)")
     p.add_argument("--strict-canvas",      action="store_true",
@@ -298,18 +298,20 @@ def build_final_canvas(video_path, detector, bg, total, args):
         else:
             raw_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
 
-        # Apply sticky mask memory — prevents flicker on canvas stability
-        mask = apply_mask_memory(raw_mask, persistence, args.mask_memory)
+        # Apply sticky mask memory — used only for OUTPUT smoothing in Pass 2
+        # For canvas updates we use raw_mask so colors commit the moment
+        # the hand actually moves away, without the artificial memory delay.
+        _sticky = apply_mask_memory(raw_mask, persistence, args.mask_memory)  # noqa: kept for persistence side-effect
 
-        frame_f  = frame.astype(np.float32)
-        clean_px = (mask == 0)
+        frame_f   = frame.astype(np.float32)
+        raw_clean = (raw_mask == 0)   # true clean: hand detector sees nothing here
 
-        # Stability: increment clean pixels, reset masked ones
-        stable_count[clean_px]  = np.minimum(stable_count[clean_px] + 1, 60000)
-        stable_count[~clean_px] = 0
+        # Stability counter uses raw_clean so artwork commits immediately
+        stable_count[raw_clean]  = np.minimum(stable_count[raw_clean] + 1, 60000)
+        stable_count[~raw_clean] = 0
 
         # Commit pixel once stable
-        commit_px = clean_px & (stable_count >= args.stable_frames)
+        commit_px = raw_clean & (stable_count >= args.stable_frames)
         canvas[commit_px] = frame_f[commit_px]
 
         if idx % 200 == 0 or idx == total - 1:
